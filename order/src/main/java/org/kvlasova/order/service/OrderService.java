@@ -1,6 +1,5 @@
 package org.kvlasova.order.service;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -10,7 +9,9 @@ import org.kvlasova.common.common_enum.OrderStatus;
 import org.kvlasova.common.entity.Order;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 import java.util.random.RandomGenerator;
 
@@ -18,28 +19,26 @@ import java.util.random.RandomGenerator;
 @RequiredArgsConstructor
 @Slf4j
 public class OrderService {
-    private final KafkaProducer<String, Object> orderProducer;
-    private final String T_ORDER_TOPIC = "t_new_order";
-
-    @PostConstruct
-
+    private final KafkaProducer<String, Order> orderProducer;
+    private final String T_ORDER_TOPIC = "t_order";
 
     //метод по обработке заказа
     public void processNewOrder(){
         //генерируем заказ
         var order = generateOrder();
         //формируем сообщение
-        ProducerRecord<String, Object> orderRecord = new ProducerRecord<>(T_ORDER_TOPIC, order.orderNumber(), order);
+        ProducerRecord<String, Order> orderRecord = new ProducerRecord<>(T_ORDER_TOPIC, order.orderNumber(), order);
         //отправляем сообщение
         try {
-            System.out.printf("Сообщение успешно отправлено в топик %s: \n%s\n", orderRecord.topic(), orderRecord);
-            orderProducer.send(orderRecord);
+            var result = orderProducer.send(orderRecord);
+            if (Objects.nonNull(result) && result.get().hasOffset()) {
+                System.out.printf("Время: %s\nСообщение успешно отправлено в топик %s: \n%s\n", Instant.now().toString(),
+                        result.get().topic(), orderRecord);
+            }
         } catch (Exception e) {
             System.err.printf("Возникла ошибка при отправке сообщения: %s\n", e.getMessage());
-        } finally {
-            //закрываем продюсера
-            orderProducer.close();
         }
+
     }
 
     //метод по генерации заказа
@@ -48,7 +47,7 @@ public class OrderService {
         List<Item> orderItems = generateOrderItems(randomGenerator);
 
         return new Order(
-                String.format("%d", randomGenerator.nextInt()),
+                String.format("%d", Math.abs(randomGenerator.nextInt())),
                 calculateTotalAmount(orderItems),
                 OrderStatus.IS_NOT_PAID,
                 orderItems
@@ -68,5 +67,9 @@ public class OrderService {
         return randomGenerator.ints(randomGenerator.nextLong(1, 4), 0, items.length)
                     .mapToObj(random -> items[random])
                     .toList();
+    }
+
+    public void orderProducerClose() {
+        orderProducer.close();
     }
 }

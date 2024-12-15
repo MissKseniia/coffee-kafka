@@ -17,9 +17,10 @@ public class OrderAppStartUpRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) throws Exception {
         Random random = new Random();
-        for (int i = 0; i < 51; i++) {
+        for (int i = 0; i < 10; i++) {
             orderService.processNewOrder();
             Thread.sleep(random.nextInt(1000, 10000));
         }
+        orderService.orderProducerClose();
     }
 }
