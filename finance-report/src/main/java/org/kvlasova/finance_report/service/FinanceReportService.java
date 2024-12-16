@@ -33,8 +33,9 @@ public class FinanceReportService {
     public void analyseOrderInfo() {
         Map<TopicPartition, OffsetAndMetadata> currentOffsets = new HashMap<>();
         // Чтение сообщений
-        while (ordersNumber.get() != 10) {
-            try {
+        try (financeReportKafkaConsumer) {
+            while (ordersNumber.get() != 10) {
+
                 ConsumerRecords<String, Order> records = financeReportKafkaConsumer.poll(Duration.ofMillis(120));
                 if (records.isEmpty()) {
                     continue;
@@ -53,19 +54,17 @@ public class FinanceReportService {
 
                     for (TopicPartition tp : financeReportKafkaConsumer.assignment()) {
                         long offset = financeReportKafkaConsumer.position(tp);
-                        System.out.println("Partition: " + tp.partition() + ", Offset: \n" + offset);
+                        System.out.printf("Partition: %d, Offset: %d\n\n", tp.partition(), offset);
                     }
                 }
-            } catch (Exception e) {
-                System.err.printf("При обработке сообщения возникла ошибка: %s\n", e.getMessage());
-            } finally {
+
                 //фиксируем смещение
                 financeReportKafkaConsumer.commitSync(currentOffsets);
                 currentOffsets.clear();
-                if (ordersNumber.get() == 10) {
-                    financeReportKafkaConsumer.close();
-                }
             }
+        } catch (Exception e) {
+            System.err.printf("При обработке сообщения возникла ошибка: %s\n", e.getMessage());
+            financeReportKafkaConsumer.close();
         }
     }
 
