@@ -1,0 +1,18 @@
+KGroupedStream<String, String> groupedByNewKey =
+    textStream.groupBy((key, value) -> value.substring(0, 1),
+                Grouped.with(Serdes.String(), Serdes.String()));
+
+        // Пример агрегирования после группировки
+        groupedByNewKey.count().toStream().to("grouped-output-topic");
+
+KGroupedStream<String, String> groupedByKey = textStream.groupByKey(
+                Grouped.with(Serdes.String(), Serdes.String()));
+
+        // Пример агрегирования после группировки по ключу
+        groupedByKey.aggregate(
+                () -> 0,  // Начальное значение агрегации
+                (key, value, aggregate) -> aggregate + 1,  // Логика агрегации
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("count-store")
+                        .withKeySerde(Serdes.String())
+                        .withValueSerde(Serdes.Integer())
+        ).toStream().to("aggregated-output-topic");

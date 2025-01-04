@@ -1,0 +1,110 @@
+Добавьте в ваш docker-compose.yaml файл эти строки, чтобы поднять ksqlDb сервер:
+ksqldb-server:
+ image: confluentinc/ksqldb-server:latest
+ depends_on:
+   - kafka
+ environment:
+   KSQL_BOOTSTRAP_SERVERS: kafka:9092
+ ports:
+   - "8088:8088"
+ networks:
+   - kafka-network
+
+ Чтобы подключить консоль, добавьте:
+ ksqldb-cli:
+  image: confluentinc/ksqldb-cli:latest
+  depends_on:
+    - ksqldb-server
+  entrypoint: /bin/sh -c 'exec ksql http://ksqldb-server:8088'
+  stdin_open: true
+  tty: true
+  networks:
+    - kafka-network
+
+  Чтобы работать с UI-клиентом, добавьте подключение в docker-compose.yaml:
+  http://localhost:8085/
+  Перейдите во вкладку "KSQL DB" в UI for Apache Kafka и нажмите на "EXECUTE FOR SQL REQUEST
+
+  ui:
+   image: provectuslabs/kafka-ui:v0.7.0
+   restart: always
+   ports:
+     - "127.0.0.1:8085:8080"
+   environment:
+     KAFKA_CLUSTERS_0_BOOTSTRAP_SERVERS: kafka-1:9092
+     KAFKA_CLUSTERS_0_KSQLDBSERVER: http://ksqldb:8088
+   networks:
+     - kafka-network
+
+ Пример KSQL-запроса для создания потока:
+
+ CREATE STREAM pageviews_stream (
+     user_id STRING,
+     page_id STRING,
+     timestamp BIGINT
+ ) WITH (
+     KAFKA_TOPIC='pageviews',  -- Имя топика Kafka
+     VALUE_FORMAT='JSON',      -- Формат данных (JSON, AVRO, DELIMITED, и т.д.)
+     PARTITIONS=1              -- Число партиций потока (по умолчанию 1)
+ );
+
+ CREATE STREAM создаёт поток данных, который обрабатывает события в реальном времени.
+ SELECT * FROM STREAM EMIT CHANGES показывает текущие данные в потоке и их изменения по мере поступления новых событий.
+ CREATE TABLE создаёт таблицу, которая агрегирует данные и хранит текущее состояние для каждого ключа.
+ INSERT INTO STREAM SELECT * FROM ANOTHER_STREAM копирует данные из одного потока в другой.
+
+
+ Пример KSQL-запроса для создания потока с фильтрацией:
+
+ CREATE STREAM filtered_emails_stream AS
+ SELECT *
+ FROM input_stream
+ WHERE value LIKE '%@yandex.ru'
+ EMIT CHANGES;
+
+ Пример KSQL-запроса для создания таблицы:
+
+ CREATE TABLE user_table (
+     user_id STRING,
+     user_email STRING
+ ) WITH (
+     KAFKA_TOPIC = 'table-input-topic',
+     VALUE_FORMAT = 'JSON',
+     KEY = 'user_id'
+ );
+
+ В KSQL доступны разные виды объединений: INNER JOIN, LEFT JOIN и OUTER JOIN.
+
+ Пример KSQL-запроса для объединения потока и таблицы:
+
+ CREATE STREAM final_stream AS
+ SELECT s.id, s.value, t.user_email
+ FROM filtered_emails_stream s
+ LEFT JOIN user_table t
+ ON s.id = t.user_id
+ EMIT CHANGES;
+
+ Пример KSQL-запроса для агрегирования данных:
+
+ CREATE TABLE views_per_region AS
+ SELECT region_id, COUNT(*) as count
+ FROM main_video_views
+ //Определяем окна агрегирования в один час
+ //Окно агрегации помогает не только реализовать требуемую бизнес-логику.
+ //Его использование предотвращает ситуацию, когда данные будут накапливаться бесконечно,
+ //из-за чего память переполнится и расчёты будут некорректными.
+ //Использование окна агрегации ― стандартная практика в потоковой обработке.
+ WINDOW TUMBLING (SIZE 1 HOUR)
+ GROUP BY region_id
+ EMIT CHANGES;
+
+ Перепартиционирование помогает оптимизировать распределение данных в кластере и в результате повысить
+ производительность и масштабируемость системы.
+ Пример KSQL-запроса для repartitioning данных:
+
+ CREATE STREAM repartitioned_stream AS
+ SELECT user_id, amount
+ FROM transactions_stream
+ //Перераспределяет данные по партициям на основе выбранного ключа
+ PARTITION BY user_id
+ EMIT CHANGES;

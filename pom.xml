@@ -25,6 +25,7 @@
         <module>finance-report</module>
         <module>payment</module>
         <module>common</module>
+        <module>k-stream</module>
     </modules>
 
 </project>
